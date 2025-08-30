@@ -24,18 +24,10 @@
 static lean_stats_t lean_stats = {0};
 static mutex_t stats_lock;
 
-/* Compare transactions by fee rate for sorting */
-static int compare_tx_feerate(const void *a, const void *b)
-{
-	const lean_tx_t *tx_a = (const lean_tx_t *)a;
-	const lean_tx_t *tx_b = (const lean_tx_t *)b;
-	double rate_a = tx_a->size > 0 ? (double)tx_a->fee / tx_a->size : 0;
-	double rate_b = tx_b->size > 0 ? (double)tx_b->fee / tx_b->size : 0;
-	
-	if (rate_b > rate_a) return 1;
-	if (rate_b < rate_a) return -1;
-	return 0;
-}
+/* NOTE: Removed compare_tx_feerate function
+ * We must NOT sort transactions to maintain dependency order.
+ * Bitcoin Core already provides transactions in valid dependency order.
+ * Sorting would break this order and cause "tx-ordering" errors. */
 
 /* Check if transaction has unresolved dependencies */
 static bool is_independent_tx(const lean_tx_t *tx, const lean_tx_t *selected, int n_selected)
@@ -163,8 +155,8 @@ json_t *build_lean_template(ckpool_t *ckp, const json_t *full_template)
 		total_fees += all_txs[i].fee;
 	}
 	
-	/* Sort transactions by fee rate (highest first) */
-	qsort(all_txs, n_txs, sizeof(lean_tx_t), compare_tx_feerate);
+	/* NOTE: Do NOT sort transactions - must maintain dependency order from bitcoind */
+	/* Bitcoin Core provides transactions in valid dependency order already */
 	
 	/* Select transactions based on mode */
 	switch (ckp->lean_mode) {
@@ -176,29 +168,26 @@ json_t *build_lean_template(ckpool_t *ckp, const json_t *full_template)
 		break;
 		
 	case LEAN_MODE_TOP_N:
-		/* Select top N independent transactions by fee rate */
+		/* Select first N transactions (maintains dependency order) */
+		/* Transactions from bitcoind are already sorted by fee/priority */
 		for (i = 0; i < n_txs && n_selected < ckp->lean_maxtx; i++) {
-			if (is_independent_tx(&all_txs[i], selected_txs, n_selected)) {
-				selected_txs[n_selected] = all_txs[i];
-				kept_fees += all_txs[i].fee;
-				total_size += all_txs[i].size;
-				n_selected++;
-			}
+			selected_txs[n_selected] = all_txs[i];
+			kept_fees += all_txs[i].fee;
+			total_size += all_txs[i].size;
+			n_selected++;
 		}
 		LOGNOTICE("LEAN: Top-%d mode - kept %d tx, %.8f BCH fees, %d bytes",
 		          ckp->lean_maxtx, n_selected, kept_fees / 100000000.0, total_size);
 		break;
 		
 	case LEAN_MODE_SIZE_CAP:
-		/* Select transactions until size limit reached */
+		/* Select transactions until size limit reached (maintains order) */
 		for (i = 0; i < n_txs && total_size < ckp->lean_maxsize_kb * 1024; i++) {
-			if (is_independent_tx(&all_txs[i], selected_txs, n_selected)) {
-				if (total_size + all_txs[i].size <= ckp->lean_maxsize_kb * 1024) {
-					selected_txs[n_selected] = all_txs[i];
-					kept_fees += all_txs[i].fee;
-					total_size += all_txs[i].size;
-					n_selected++;
-				}
+			if (total_size + all_txs[i].size <= ckp->lean_maxsize_kb * 1024) {
+				selected_txs[n_selected] = all_txs[i];
+				kept_fees += all_txs[i].fee;
+				total_size += all_txs[i].size;
+				n_selected++;
 			}
 		}
 		LOGNOTICE("LEAN: Size-cap mode - kept %d tx in %d bytes, %.8f BCH fees",
