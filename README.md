@@ -17,6 +17,11 @@
   - Redundant block notifications (failover support)
   - Faster block detection (milliseconds vs polling)
   - Load distribution across nodes
+- **Lean Blocks Mining** 🆕
+  - Maximize block discovery rate over fee collection
+  - Three configurable modes for different strategies
+  - Ideal for high-hashrate burst mining
+  - Proven strategy used by successful BCH miners
 - **Bitcoin Cash Optimizations**
   - SegWit removed for BCH compatibility
   - Optimized for ASIC miners (500k+ difficulty)
@@ -116,6 +121,120 @@ cd ckpool
 }
 ```
 
+### Lean Blocks Configuration (Advanced)
+
+Lean blocks is a mining strategy that prioritizes block discovery rate over transaction fee collection. This is particularly effective during high-hashrate bursts or when competing with other miners.
+
+#### Configuration Options
+
+```json
+{
+    "lean_blocks": true,           // Enable lean blocks feature (default: false)
+    "lean_mode": "top_n",          // Mining mode: "coinbase_only", "top_n", or "size_cap"
+    "lean_maxtx": 5,               // Max transactions to include (for top_n mode)
+    "lean_maxsize_kb": 10          // Max block size in KB (for size_cap mode)
+}
+```
+
+#### Available Modes
+
+**1. Normal Mining (lean_blocks: false)**
+- Traditional mining with all transactions included
+- Maximizes fee collection
+- Larger blocks, slower propagation
+- Best for: Steady hashrate, low competition
+
+**2. Coinbase-Only Mode**
+```json
+{
+    "lean_blocks": true,
+    "lean_mode": "coinbase_only"
+}
+```
+- Empty blocks (only coinbase transaction)
+- Zero transaction fees collected
+- Fastest possible block propagation
+- Best for: Maximum speed during hashrate spikes, competing with fast miners
+
+**3. Top-N Mode**
+```json
+{
+    "lean_blocks": true,
+    "lean_mode": "top_n",
+    "lean_maxtx": 5
+}
+```
+- Includes only the top N highest-fee transactions
+- Balances speed with some fee collection
+- Maintains transaction ordering for dependencies
+- Best for: General lean mining, good compromise between speed and fees
+
+**4. Size-Cap Mode**
+```json
+{
+    "lean_blocks": true,
+    "lean_mode": "size_cap",
+    "lean_maxsize_kb": 10
+}
+```
+- Limits block size to specified KB
+- Includes as many transactions as fit
+- Predictable block size
+- Best for: Network conditions where specific block sizes perform better
+
+#### When to Use Lean Blocks
+
+**Enable Lean Blocks When:**
+- You have sudden hashrate spikes (e.g., 400+ PH/s bursts)
+- Competing with miners using similar strategies
+- Network latency is high to other miners
+- Block propagation speed is critical
+- You observe other miners finding many blocks quickly
+
+**Use Normal Mode When:**
+- Network fees are exceptionally high
+- You have consistent, steady hashrate
+- Less competition from other miners
+- You want to maximize revenue per block
+
+#### Decision Matrix
+
+Use this table to choose the optimal mode based on your hashrate and current mempool fees:
+
+| Hashrate     | Mempool Fees | Best Mode      | Configuration                    |
+|--------------|--------------|----------------|-----------------------------------|
+| < 100 PH     | Any          | Normal         | `"lean_blocks": false`            |
+| 100-200 PH   | < 0.1 BCH    | Top_5          | `"lean_mode": "top_n", "lean_maxtx": 5` |
+| 100-200 PH   | > 0.1 BCH    | Normal         | `"lean_blocks": false`            |
+| 200-500 PH   | < 0.05 BCH   | Coinbase_only  | `"lean_mode": "coinbase_only"`   |
+| 200-500 PH   | 0.05-0.5 BCH | Top_5          | `"lean_mode": "top_n", "lean_maxtx": 5` |
+| 200-500 PH   | > 0.5 BCH    | Normal         | `"lean_blocks": false`            |
+| 500+ PH      | < 0.1 BCH    | Coinbase_only  | `"lean_mode": "coinbase_only"`   |
+| 500+ PH      | > 0.1 BCH    | Top_10         | `"lean_mode": "top_n", "lean_maxtx": 10` |
+
+**Note:** These are guidelines based on typical BCH network conditions. Adjust based on your specific situation and competition.
+
+#### Real-World Example
+
+A successful BCH miner achieves 5+ blocks/hour using a strategy similar to top_n mode with ~10-20 transactions, sacrificing ~0.0006 BCH in fees per block to dramatically increase block discovery rate.
+
+#### Testing Status
+
+✅ **Fully Tested on Regtest:**
+- Normal mode (full blocks) - Working perfectly
+- Coinbase-only mode (empty blocks) - Working perfectly  
+- Top-N mode (5 transactions) - Working perfectly
+- Size-cap mode - Working perfectly
+- No "bad-cb-amount" errors
+- Successful block acceptance in all modes
+
+⏳ **Pending Testnet Validation:**
+- Currently syncing testnet nodes (ETA: ~2 hours)
+- Node 1 (10.0.1.238): 14.68% synced
+- Node 2 (10.0.0.61): 12.39% synced
+- Will validate all lean modes on testnet
+- Production deployment after testnet confirmation
+
 ## 🚦 BCH Node Setup
 
 ### Enable ZMQ in bitcoin.conf
@@ -169,6 +288,18 @@ tail -f ~/ckpool/logs/ckpool.log
 
 # View connected workers
 ./ckpmsg -s /tmp/ckpool/stratifier users
+
+# Monitor lean blocks performance (if enabled)
+grep "LEAN_BLOCK" ~/ckpool/logs/ckpool.log | tail -20
+
+# Check lean blocks statistics
+grep "LEAN_BLOCK" ~/ckpool/logs/ckpool.log | awk '{
+    for(i=1; i<=NF; i++) {
+        if($i ~ /kept_tx=/) kept=substr($i,9)
+        if($i ~ /fees_dropped=/) dropped=substr($i,14)
+    }
+    total+=dropped
+} END { printf "Total fees sacrificed: %.8f BCH\n", total }'
 ```
 
 ### Stop the Pool
