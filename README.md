@@ -220,13 +220,41 @@ A successful BCH miner achieves 5+ blocks/hour using a strategy similar to top_n
 
 #### Testing Status
 
-✅ **Fully Tested on Regtest:**
-- Normal mode (full blocks) - Working perfectly
-- Coinbase-only mode (empty blocks) - Working perfectly  
-- Top-N mode (5 transactions) - Working perfectly
-- Size-cap mode - Working perfectly
-- No "bad-cb-amount" errors
-- Successful block acceptance in all modes
+✅ **Regtest Testing Summary:**
+
+**Results:**
+- **401 blocks found successfully** across all modes
+- **Coinbase fix working** - Original value correctly adjusted (e.g., 312525302 → 312500000)
+- **Lean blocks operational** - Dropping transactions as configured
+- **Dual submit tested** - Both nodes accepting blocks
+
+**Key Validations:**
+- ✅ Coinbase calculation fixed (no more bad-cb-amount errors)
+- ✅ Both coinbase_only and top_n modes working
+- ✅ Dual node submission functioning
+- ✅ All block sizes optimized (0.00KB for coinbase_only, 1-2KB for top_n)
+
+**Example Log Output:**
+```
+[2025-08-30 18:29:06.498] BLOCK ACCEPTED!
+[2025-08-30 18:29:06.514] COINBASE_FIX: Original=312525302 Subsidy=312500000 TotalFees=25302 KeptFees=0 New=312500000
+[2025-08-30 18:29:06.514] LEAN_BLOCK: mode=coinbase_only kept_tx=0 dropped_tx=53 size=0.00KB fees_kept=0.00000000 fees_dropped=0.00025302
+[2025-08-30 18:29:09.493] BLOCK ACCEPTED!
+[2025-08-30 17:27:31.510] DUAL_SUBMIT: Primary=ACCEPTED Backup=ACCEPTED
+```
+
+**Validation Commands:**
+```bash
+# Count successful blocks
+grep -c "BLOCK ACCEPTED" ~/ckpool/logs/ckpool.log
+# Result: 401
+
+# Check coinbase adjustments
+grep "COINBASE_FIX" ~/ckpool/logs/ckpool.log | tail -5
+
+# Verify dual submit
+grep "DUAL_SUBMIT" ~/ckpool/logs/ckpool.log | tail -5
+```
 
 ⏳ **Pending Testnet Validation:**
 - Currently syncing testnet nodes (ETA: ~2 hours)
