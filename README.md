@@ -76,9 +76,9 @@ cd ckpool
         "notify": true,
         "zmqnotify": "tcp://127.0.0.1:28333"
     }],
-    "btcaddress": "YOUR_BCH_ADDRESS",
+    "btcaddress": "YOUR_BCH_ADDRESS",  // ⚠️ MUST use legacy format (1xxx), NOT bitcoincash: format
     "btcsig": "/[Solo]",
-    "pooladdress": "YOUR_BCH_ADDRESS",
+    "pooladdress": "YOUR_BCH_ADDRESS",  // ⚠️ MUST use legacy format (1xxx), NOT bitcoincash: format
     "poolfee": 1,
     "blockpoll": 50,
     "update_interval": 15,
@@ -109,9 +109,9 @@ cd ckpool
             "zmqnotify": "tcp://10.0.1.11:28333"
         }
     ],
-    "btcaddress": "YOUR_BCH_ADDRESS",
+    "btcaddress": "YOUR_BCH_ADDRESS",  // ⚠️ Use legacy format (1xxx) - CashAddr not yet supported
     "btcsig": "/EloPool/",
-    "pooladdress": "YOUR_BCH_ADDRESS",
+    "pooladdress": "YOUR_BCH_ADDRESS",  // ⚠️ Use legacy format (1xxx) - CashAddr not yet supported
     "poolfee": 1,
     "mindiff": 500000,
     "startdiff": 500000,
@@ -275,6 +275,36 @@ grep "DUAL_SUBMIT" ~/ckpool/logs/ckpool.log | tail -5
 ```
 
 🚀 **Production Ready** - All testing complete and successful!
+
+## ⚠️ Known Issues
+
+### Critical: BCH CashAddr Format Not Supported
+**Issue**: The current CKPool fork does not properly parse Bitcoin Cash CashAddr format addresses (e.g., `bitcoincash:`, `bchtest:`). When configured with a CashAddr format address, blocks are mined to an incorrect address.
+
+**Example**:
+- Configured: `bchtest:qq6qjj976fc8nvumexkhpwgh6azm470m9ulggmnrma`
+- Actually mines to: `bchtest:qpshgv0v5t0a5tk9fwxeawzxumnec380c5lejde3n7` (WRONG!)
+
+**Workaround**: Use legacy Bitcoin address format (Base58) for now:
+```json
+{
+    "btcaddress": "1AGQcP3KNqTAQkZQA2LBCKqvYn1C4V7cS",
+    "pooladdress": "1AGQcP3KNqTAQkZQA2LBCKqvYn1C4V7cS"
+}
+```
+
+**TODO**: 
+- [ ] Add proper CashAddr parsing support
+- [ ] Support both `bitcoincash:` (mainnet) and `bchtest:` (testnet) prefixes
+- [ ] Validate address conversion between formats
+- [ ] Priority: **URGENT** - Risk of mining to wrong address
+
+**Affected Configurations**:
+- Mainnet with `bitcoincash:` addresses
+- Testnet with `bchtest:` addresses
+- Any BCH CashAddr format
+
+**Safe to Use**: Legacy Bitcoin addresses (1xxx format) work correctly
 
 ## 🚦 BCH Node Setup
 
