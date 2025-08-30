@@ -930,7 +930,10 @@ struct genwork *generator_getbase(ckpool_t *ckp)
 			/* Replace original template with lean version */
 			json_decref(gbt->json);
 			gbt->json = lean_json;
-			LOGNOTICE("LEAN: Using lean template for new work");
+			
+			/* CRITICAL: Update gbt->coinbasevalue from the lean template */
+			gbt->coinbasevalue = json_integer_value(json_object_get(lean_json, "coinbasevalue"));
+			LOGNOTICE("LEAN: Using lean template with coinbasevalue=%llu", gbt->coinbasevalue);
 		} else {
 			LOGWARNING("LEAN: Failed to create lean template, using full template");
 		}

@@ -598,6 +598,7 @@ static void generate_coinbase(ckpool_t *ckp, workbase_t *wb)
 
 	// Generation value
 	g64 = wb->coinbasevalue;
+	LOGDEBUG("LEAN_DEBUG: Generating coinbase with value=%llu", wb->coinbasevalue);
 	if (ckp->donvalid && ckp->donation > 0) {
 		double dbl64 = (double)g64 / 100 * ckp->donation;
 
