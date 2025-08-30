@@ -349,7 +349,7 @@ static void clear_unix_msg(unix_msg_t **umsg)
 bool generator_submitblock(ckpool_t *ckp, const char *buf)
 {
 	gdata_t *gdata = ckp->gdata;
-	server_instance_t *si, *si2 = NULL;
+	server_instance_t *si;
 	bool warn = false;
 	bool ret1 = false, ret2 = false;
 	connsock_t *cs;
@@ -366,27 +366,29 @@ bool generator_submitblock(ckpool_t *ckp, const char *buf)
 	LOGNOTICE("Submitting block to primary node!");
 	ret1 = submit_block(cs, buf);
 	
-	/* Dual submit if enabled and we have a secondary node */
+	/* Dual submit if enabled and we have a backup server */
 	if (ckp->dual_submit && ckp->btcds > 1) {
-		/* Find a different server for secondary submission */
-		server_instance_t *tmp;
-		
-		LL_FOREACH(gdata->servers, tmp) {
-			if (tmp != si && tmp->alive) {
-				si2 = tmp;
-				break;
+		/* Try to submit to backup servers */
+		for (int i = 0; i < ckp->btcds; i++) {
+			/* Skip if this is the current server */
+			if (ckp->servers[i] == si)
+				continue;
+			
+			/* Try to submit to this backup server */
+			if (ckp->servers[i] && ckp->servers[i]->alive) {
+				server_instance_t *backup = ckp->servers[i];
+				LOGNOTICE("DUAL_SUBMIT: Submitting block to backup node %s:%s", 
+				          backup->cs.url, backup->cs.port);
+				ret2 = submit_block(&backup->cs, buf);
+				LOGWARNING("DUAL_SUBMIT: Primary=%s Backup=%s",
+				           ret1 ? "ACCEPTED" : "REJECTED",
+				           ret2 ? "ACCEPTED" : "REJECTED");
+				break; /* Only submit to one backup */
 			}
 		}
 		
-		if (si2) {
-			LOGNOTICE("DUAL_SUBMIT: Submitting block to secondary node %s:%s", 
-			          si2->cs.url, si2->cs.port);
-			ret2 = submit_block(&si2->cs, buf);
-			LOGWARNING("DUAL_SUBMIT: Primary=%s Secondary=%s",
-			           ret1 ? "ACCEPTED" : "REJECTED",
-			           ret2 ? "ACCEPTED" : "REJECTED");
-		} else {
-			LOGDEBUG("DUAL_SUBMIT: No secondary node available");
+		if (!ret2 && ckp->btcds > 1) {
+			LOGDEBUG("DUAL_SUBMIT: No backup node available");
 		}
 	}
 	
