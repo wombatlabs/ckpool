@@ -24,6 +24,13 @@
 struct ckpool_instance;
 typedef struct ckpool_instance ckpool_t;
 
+/* Lean block mining modes */
+enum lean_mode {
+	LEAN_MODE_COINBASE_ONLY = 0,
+	LEAN_MODE_TOP_N = 1,
+	LEAN_MODE_SIZE_CAP = 2
+};
+
 struct ckmsg {
 	struct ckmsg *next;
 	struct ckmsg *prev;
@@ -278,6 +285,14 @@ struct ckpool_instance {
 	int redirecturls;
 	char **redirecturl;
 	char **redirectport;
+
+	/* Lean blocks configuration */
+	bool lean_blocks; // Enable lean block mining
+	int lean_mode; // 0=coinbase_only, 1=top_n, 2=size_cap
+	int lean_maxtx; // Max transactions for top_n mode
+	int lean_maxsize_kb; // Max block size in KB for size_cap mode
+	bool dual_submit; // Submit blocks to both primary and secondary nodes
+	bool aggressive_preflight; // Skip preflight for coinbase_only mode
 
 	/* Private data for each process */
 	void *gdata;

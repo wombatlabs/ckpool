@@ -20,6 +20,7 @@
 #include "generator.h"
 #include "stratifier.h"
 #include "bitcoin.h"
+#include "lean.h"
 #include "uthash.h"
 #include "utlist.h"
 
@@ -348,8 +349,9 @@ static void clear_unix_msg(unix_msg_t **umsg)
 bool generator_submitblock(ckpool_t *ckp, const char *buf)
 {
 	gdata_t *gdata = ckp->gdata;
-	server_instance_t *si;
+	server_instance_t *si, *si2 = NULL;
 	bool warn = false;
+	bool ret1 = false, ret2 = false;
 	connsock_t *cs;
 
 	while (unlikely(!(si = gdata->current_si))) {
@@ -359,8 +361,37 @@ bool generator_submitblock(ckpool_t *ckp, const char *buf)
 		cksleep_ms(10);
 	}
 	cs = &si->cs;
-	LOGNOTICE("Submitting block data!");
-	return submit_block(cs, buf);
+	
+	/* Submit to primary node */
+	LOGNOTICE("Submitting block to primary node!");
+	ret1 = submit_block(cs, buf);
+	
+	/* Dual submit if enabled and we have a secondary node */
+	if (ckp->dual_submit && ckp->btcds > 1) {
+		/* Find a different server for secondary submission */
+		server_instance_t *tmp;
+		
+		LL_FOREACH(gdata->servers, tmp) {
+			if (tmp != si && tmp->alive) {
+				si2 = tmp;
+				break;
+			}
+		}
+		
+		if (si2) {
+			LOGNOTICE("DUAL_SUBMIT: Submitting block to secondary node %s:%s", 
+			          si2->cs.url, si2->cs.port);
+			ret2 = submit_block(&si2->cs, buf);
+			LOGWARNING("DUAL_SUBMIT: Primary=%s Secondary=%s",
+			           ret1 ? "ACCEPTED" : "REJECTED",
+			           ret2 ? "ACCEPTED" : "REJECTED");
+		} else {
+			LOGDEBUG("DUAL_SUBMIT: No secondary node available");
+		}
+	}
+	
+	/* Return true if either submission succeeded */
+	return ret1 || ret2;
 }
 
 void generator_preciousblock(ckpool_t *ckp, const char *hash)
@@ -867,6 +898,7 @@ struct genwork *generator_getbase(ckpool_t *ckp)
 	gbtbase_t *gbt = NULL;
 	server_instance_t *si;
 	connsock_t *cs;
+	json_t *lean_json;
 
 	/* Use temporary variables to prevent deref while accessing */
 	si = gdata->current_si;
@@ -881,6 +913,25 @@ struct genwork *generator_getbase(ckpool_t *ckp)
 		si->alive = cs->alive = false;
 		reconnect_generator(ckp);
 		dealloc(gbt);
+		goto out;
+	}
+	
+	/* Apply lean template transformation if enabled */
+	if (ckp->lean_blocks && gbt && gbt->json) {
+		lean_json = build_lean_template(ckp, gbt->json);
+		if (lean_json) {
+			/* Validate with preflight if not in aggressive mode */
+			if (!ckp->aggressive_preflight || ckp->lean_mode != LEAN_MODE_COINBASE_ONLY) {
+				/* TODO: Implement preflight check here if needed */
+				LOGDEBUG("LEAN: Template transformed, preflight check would go here");
+			}
+			/* Replace original template with lean version */
+			json_decref(gbt->json);
+			gbt->json = lean_json;
+			LOGNOTICE("LEAN: Using lean template for new work");
+		} else {
+			LOGWARNING("LEAN: Failed to create lean template, using full template");
+		}
 	}
 out:
 	return gbt;

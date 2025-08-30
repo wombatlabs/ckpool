@@ -15,6 +15,7 @@
 #include "libckpool.h"
 #include "bitcoin.h"
 #include "stratifier.h"
+#include "lean.h"
 
 static char* understood_rules[] = {"segwit"};
 

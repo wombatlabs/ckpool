@@ -1462,6 +1462,42 @@ static void parse_config(ckpool_t *ckp)
 		sscanf(vmask, "%x", &ckp->version_mask);
 	else
 		ckp->version_mask = 0x1fffe000;
+	
+	/* Parse lean blocks configuration */
+	json_get_bool(&ckp->lean_blocks, json_conf, "lean_blocks");
+	if (ckp->lean_blocks) {
+		char *lean_mode_str = NULL;
+		json_get_string(&lean_mode_str, json_conf, "lean_mode");
+		if (lean_mode_str) {
+			if (!strcasecmp(lean_mode_str, "coinbase_only"))
+				ckp->lean_mode = LEAN_MODE_COINBASE_ONLY;
+			else if (!strcasecmp(lean_mode_str, "top_n"))
+				ckp->lean_mode = LEAN_MODE_TOP_N;
+			else if (!strcasecmp(lean_mode_str, "size_cap"))
+				ckp->lean_mode = LEAN_MODE_SIZE_CAP;
+			else {
+				LOGWARNING("Unknown lean_mode '%s', defaulting to coinbase_only", lean_mode_str);
+				ckp->lean_mode = LEAN_MODE_COINBASE_ONLY;
+			}
+			free(lean_mode_str);
+		} else {
+			ckp->lean_mode = LEAN_MODE_COINBASE_ONLY;
+		}
+		json_get_int(&ckp->lean_maxtx, json_conf, "lean_maxtx");
+		json_get_int(&ckp->lean_maxsize_kb, json_conf, "lean_maxsize_kb");
+		if (!ckp->lean_maxsize_kb)
+			ckp->lean_maxsize_kb = 50; // Default 50KB
+		
+		LOGNOTICE("Lean blocks enabled: mode=%s maxtx=%d maxsize=%dKB dual=%s preflight=%s",
+			ckp->lean_mode == LEAN_MODE_COINBASE_ONLY ? "coinbase_only" :
+			ckp->lean_mode == LEAN_MODE_TOP_N ? "top_n" : "size_cap",
+			ckp->lean_maxtx, ckp->lean_maxsize_kb,
+			ckp->dual_submit ? "yes" : "no",
+			ckp->aggressive_preflight ? "aggressive" : "normal");
+	}
+	json_get_bool(&ckp->dual_submit, json_conf, "dual_submit");
+	json_get_bool(&ckp->aggressive_preflight, json_conf, "aggressive_preflight");
+	
 	/* Look for an array first and then a single entry */
 	arr_val = json_object_get(json_conf, "serverurl");
 	if (!parse_serverurls(ckp, arr_val)) {
