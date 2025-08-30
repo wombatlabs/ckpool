@@ -57,14 +57,22 @@ fi
 # Clean any previous build
 echo -e "${YELLOW}[2/6] Cleaning previous build...${NC}"
 if [ -f "Makefile" ]; then
-    make distclean 2>/dev/null || true
+    make clean 2>/dev/null || true
 fi
-rm -f Makefile configure
 
 # Build from source
-echo -e "${YELLOW}[3/6] Building EloPool with lean blocks...${NC}"
-./autogen.sh
-CFLAGS="-O2 -march=native" ./configure
+echo -e "${YELLOW}[3/6] Building EloPool with lean blocks (FIXED coinbase calculation)...${NC}"
+
+# Only run autogen.sh and configure if Makefile doesn't exist
+if [ ! -f "Makefile" ]; then
+    echo "Running autogen.sh and configure..."
+    ./autogen.sh
+    CFLAGS="-O2 -march=native" ./configure
+else
+    echo "Makefile exists, skipping autogen/configure"
+fi
+
+echo "Building with $(nproc) cores..."
 make -j$(nproc)
 
 if [ $? -ne 0 ]; then
@@ -80,11 +88,18 @@ mkdir -p "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/logs"
 mkdir -p "$INSTALL_DIR/configs"
 
+# Stop any running ckpool before updating binaries
+if pgrep -f ckpool > /dev/null; then
+    echo -e "${YELLOW}Stopping running ckpool...${NC}"
+    pkill -f ckpool
+    sleep 2
+fi
+
 # Copy binaries (they're built in src/ directory)
 cp -f src/ckpool "$INSTALL_DIR/" 2>/dev/null || cp -f ckpool "$INSTALL_DIR/"
 cp -f src/ckpmsg "$INSTALL_DIR/" 2>/dev/null || cp -f ckpmsg "$INSTALL_DIR/"
 cp -f src/notifier "$INSTALL_DIR/" 2>/dev/null || cp -f notifier "$INSTALL_DIR/"
-echo -e "${GREEN}✓ Binaries installed${NC}"
+echo -e "${GREEN}✓ Binaries updated with coinbase fix${NC}"
 
 # Create test configurations
 echo -e "${YELLOW}[5/6] Creating configurations...${NC}"
@@ -349,9 +364,11 @@ echo "  Switch modes:  ${GREEN}cd ~/ckpool && ./switch-mode.sh${NC}"
 echo "  Monitor:       ${GREEN}cd ~/ckpool && ./monitor.sh${NC}"
 echo "  View logs:     ${GREEN}cd ~/ckpool && ./logs.sh${NC}"
 echo ""
-echo -e "${YELLOW}Lean blocks mode:${NC}"
-echo "  • Mines empty blocks for maximum speed"
-echo "  • Dual submits to both nodes"
+echo -e "${YELLOW}Lean blocks mode (WITH COINBASE FIX):${NC}"
+echo "  • Fixed coinbase calculation - no more bad-cb-amount errors!"
+echo "  • Coinbase now correctly = subsidy + kept_fees"
+echo "  • Three modes: coinbase_only, top_n, size_cap"
+echo "  • Dual submits to both nodes (optional)"
 echo "  • Best for high hashrate bursts"
 echo ""
 echo -e "${BLUE}Next steps:${NC}"

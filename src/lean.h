@@ -39,6 +39,9 @@ typedef struct lean_stats {
 /* Build a lean template from the full template */
 json_t *build_lean_template(ckpool_t *ckp, const json_t *full_template);
 
+/* Validate coinbase amount matches included transactions */
+bool validate_coinbase_amount(const json_t *template, uint64_t expected_subsidy);
+
 /* Validate template with preflight check */
 bool lean_preflight_check(connsock_t *cs, const char *block_hex);
 

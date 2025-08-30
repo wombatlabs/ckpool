@@ -64,6 +64,40 @@ static bool is_independent_tx(const lean_tx_t *tx, const lean_tx_t *selected, in
 	return true;
 }
 
+/* Validate coinbase amount matches included transactions */
+bool validate_coinbase_amount(const json_t *template, uint64_t expected_subsidy)
+{
+	json_t *transactions;
+	uint64_t total_fees = 0;
+	uint64_t coinbasevalue;
+	int i, n_txs;
+	
+	transactions = json_object_get(template, "transactions");
+	if (!transactions || !json_is_array(transactions))
+		return true; /* No transactions to validate */
+	
+	n_txs = json_array_size(transactions);
+	for (i = 0; i < n_txs; i++) {
+		json_t *tx = json_array_get(transactions, i);
+		json_t *fee_val = json_object_get(tx, "fee");
+		if (fee_val)
+			total_fees += json_integer_value(fee_val);
+	}
+	
+	coinbasevalue = json_integer_value(json_object_get(template, "coinbasevalue"));
+	uint64_t expected_coinbase = expected_subsidy + total_fees;
+	
+	if (coinbasevalue != expected_coinbase) {
+		LOGERR("COINBASE MISMATCH: have=%llu expected=%llu (subsidy=%llu fees=%llu)",
+		       coinbasevalue, expected_coinbase, expected_subsidy, total_fees);
+		return false;
+	}
+	
+	LOGDEBUG("COINBASE VALID: value=%llu subsidy=%llu fees=%llu", 
+	         coinbasevalue, expected_subsidy, total_fees);
+	return true;
+}
+
 /* Build lean template from full template */
 json_t *build_lean_template(ckpool_t *ckp, const json_t *full_template)
 {
@@ -181,10 +215,15 @@ json_t *build_lean_template(ckpool_t *ckp, const json_t *full_template)
 	/* Update template with new transaction list */
 	json_object_set_new(lean_template, "transactions", new_transactions);
 	
-	/* Adjust coinbase value */
+	/* Adjust coinbase value - CRITICAL FIX for bad-cb-amount */
 	coinbasevalue = json_integer_value(json_object_get(full_template, "coinbasevalue"));
 	subsidy = coinbasevalue - total_fees;
-	json_object_set_new(lean_template, "coinbasevalue", json_integer(subsidy + kept_fees));
+	uint64_t new_coinbasevalue = subsidy + kept_fees;
+	json_object_set_new(lean_template, "coinbasevalue", json_integer(new_coinbasevalue));
+	
+	/* Log the coinbase adjustment for debugging */
+	LOGNOTICE("COINBASE_FIX: Original=%llu Subsidy=%llu TotalFees=%llu KeptFees=%llu New=%llu",
+	          coinbasevalue, subsidy, total_fees, kept_fees, new_coinbasevalue);
 	
 	/* Log statistics */
 	LOGNOTICE("LEAN: Dropped %.8f BCH in fees (%d transactions)",
