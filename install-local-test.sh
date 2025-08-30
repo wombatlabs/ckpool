@@ -80,10 +80,10 @@ mkdir -p "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/logs"
 mkdir -p "$INSTALL_DIR/configs"
 
-# Copy binaries
-cp -f ckpool "$INSTALL_DIR/"
-cp -f ckpmsg "$INSTALL_DIR/"
-cp -f notifier "$INSTALL_DIR/"
+# Copy binaries (they're built in src/ directory)
+cp -f src/ckpool "$INSTALL_DIR/" 2>/dev/null || cp -f ckpool "$INSTALL_DIR/"
+cp -f src/ckpmsg "$INSTALL_DIR/" 2>/dev/null || cp -f ckpmsg "$INSTALL_DIR/"
+cp -f src/notifier "$INSTALL_DIR/" 2>/dev/null || cp -f notifier "$INSTALL_DIR/"
 echo -e "${GREEN}✓ Binaries installed${NC}"
 
 # Create test configurations

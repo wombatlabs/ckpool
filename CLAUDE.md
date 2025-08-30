@@ -6,6 +6,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CKPool (rebranded as EloPool) is a high-performance Bitcoin Cash (BCH) mining pool written in C. It uses a modular multi-process architecture with Unix domain sockets for IPC, optimized for ASIC miners with production-ready features like seamless restarts and comprehensive monitoring.
 
+## CRITICAL: Lean Blocks Feature Branch
+
+**Current Branch: feat/lean-blocks-dual-submit**
+
+This branch implements a **lean blocks** mining strategy to maximize block discovery rate by mining empty or near-empty blocks, similar to successful BCH miners who prioritize finding blocks over collecting transaction fees.
+
+### Key Features:
+- **Lean Blocks**: Three modes - `coinbase_only` (empty), `top_n` (top N txs), `size_cap` (size limited)
+- **Dual Submit** (optional): Submits to multiple nodes for redundancy
+- **Aggressive Mode**: Skip validation for maximum speed on empty blocks
+
+### Priority: 
+The PRIMARY goal is lean blocks functionality. Dual submit is secondary and optional - it's normal for the second submission to return "duplicate" errors.
+
+### Test Environment:
+- Test Server: 10.0.0.144
+- BCH Node 1: 10.0.0.61:8332 (primary)
+- BCH Node 2: 10.0.1.238:8332 (backup)
+- Credentials: skaisser / Leprechal22
+- Install Path: ~/ckpool/
+
+### Current Status:
+- Lean blocks core functionality: IMPLEMENTED
+- Template pruning (coinbase_only, top_n, size_cap): COMPLETE
+- Configuration parsing: COMPLETE
+- Dual submit: OPTIONAL (may show duplicate errors - this is normal)
+
+### Files Modified for Lean Blocks:
+- `src/lean.c` / `src/lean.h` - Core lean blocks implementation
+- `src/generator.c` - Template processing and optional dual submit
+- `src/ckpool.c` / `src/ckpool.h` - Configuration structures
+- `src/bitcoin.c` - Include lean.h
+- `src/Makefile.am` - Build configuration
+
+### Testing Commands:
+```bash
+# On test server 10.0.0.144
+cd ~/ckpool
+./test-nodes.sh          # Test connectivity to both nodes
+./start-lean.sh          # Start with empty blocks
+./monitor.sh             # Monitor lean block generation
+grep "LEAN_BLOCK" logs/ckpool.log | tail -20
+```
+
 ## Build and Development Commands
 
 ### Building the Project
