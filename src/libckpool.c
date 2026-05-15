@@ -1830,6 +1830,18 @@ int address_to_txn(char *p2h, const char *addr, const bool script, const bool se
 		return cashaddr_to_script(addr, (uint8_t *)p2h);
 	}
 
+	/* Bare CashAddr (no prefix) starts with 'q' or 'p' and is 42 chars.
+	 * Without this fix, parser falls through to Base58 decoder which
+	 * silently produces wrong hash160 (no checksum validation). */
+	if ((addr[0] == 'q' || addr[0] == 'p' ||
+	     addr[0] == 'Q' || addr[0] == 'P') &&
+	    strchr(addr, ':') == NULL && strlen(addr) >= 42) {
+		char prefixed[128];
+		snprintf(prefixed, sizeof(prefixed), "bitcoincash:%s", addr);
+		LOGINFO("Auto-prefixed bare CashAddr: %s -> %s", addr, prefixed);
+		return cashaddr_to_script(prefixed, (uint8_t *)p2h);
+	}
+
 	if (segwit)
 		return segaddress_to_txn(p2h, addr);
 	if (script)
